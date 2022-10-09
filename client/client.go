@@ -4,7 +4,7 @@ import "net/url"
 
 type Song struct {
 	Name string
-	Image string 
+	ImageUrl string 
 };
 
 type Client interface {

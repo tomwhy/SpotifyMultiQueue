@@ -13,3 +13,8 @@ type TokenResponse struct {
 	Expires int `json:"expires_in"`
 	RefreshToken string `json:"refresh_token"`
 }
+
+type ApiErr struct {
+	Status int `json:"status"`
+	Message string `json:"message"`
+}

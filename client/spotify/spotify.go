@@ -148,6 +148,30 @@ func (c *SpotifyClient) CompleteAuthorization(urlParams map[string]string) error
 	return nil
 }
 
+func (c *SpotifyClient) getApiEndpoint(endpoint string, params map[string]string, expectedCode int, resp interface{}, errResp interface{}) (bool, error) {
+	apiRes, err := utils.SendGetApiRequest(
+		API_BASE_URL, 
+		endpoint, 
+		params,
+		map[string]string {
+			"Authorization": fmt.Sprintf("Bearer %s", c.accessToken.GetToken()),
+			"Content-Type": "application/json",
+		},
+	)
+
+	if(err != nil) {
+		return false, errors.Wrap("failed getting api result")
+	}
+
+	if(apiRes.StatusCode != expectedCode) {
+		json.NewDecoder(apiRes.Body).Decode(errResp)
+	} else {
+		json.NewDecoder(apiRes.Body).Decode(resp)
+	}
+
+	return apiRes.StatusCode == expectedCode, nil
+}
+
 
 func (c *SpotifyClient) SearchSongs(search_phrase string) ([]client.Song, error) {
 	return nil, errors.New("Unimplemnted")
@@ -158,6 +182,23 @@ func (c *SpotifyClient) QueueSong(song client.Song) error {
 
 }
 
+
 func (c *SpotifyClient) GetPlayingSong() (client.Song, error) {
-	return client.Song{}, errors.New("Unimplemnted")
+
+	var currentSong map[string]interface{}
+	var errMsg ApiErr
+
+	success, err := c.getApiEndpoint("/me/player/currently-playing", nil, http.StatusOK, &currentSong, &errMsg)
+	if(err != nil) {
+		return client.Song{}, errors.Wrap("failed getting current song")
+	}
+
+	if(!success) {
+		return client.Song{}, errors.New(fmt.Sprintf("%d: %s", errMsg.Status, errMsg.Message))
+	}
+
+	// TEMP
+	return client.Song{
+		Name: currentSong["item"].(map[string]interface{})["name"].(string),
+	}, nil
 }

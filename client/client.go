@@ -3,8 +3,11 @@ package client
 import "net/url"
 
 type Song struct {
-	Name string
-	ImageUrl string 
+	Name string `json:"name"`
+	ImageUrl string `json:"image,omitempty"`
+	ArtistName string `json:"artist"`
+
+	Priv interface{}
 };
 
 type Client interface {

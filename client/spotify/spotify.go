@@ -109,13 +109,13 @@ func (c *SpotifyClient) GetAccessToken(code string) (client.AccessToken, error) 
 	resDecoder := json.NewDecoder(authRes.Body)
 
 	if(authRes.StatusCode != http.StatusOK) {
-		var errRes AuthErr;
+		var errRes authErr;
 		resDecoder.Decode(&errRes)
 
 		return nil, errors.New(fmt.Sprintf("%s: %s", errRes.Error, errRes.Desc))
 	}
 
-	var tokenRes TokenResponse;
+	var tokenRes tokenResponse;
 	resDecoder.Decode(&tokenRes)
 
 	return &SpotifyAccessToken{
@@ -173,7 +173,38 @@ func (c *SpotifyClient) getApiEndpoint(endpoint string, params map[string]string
 
 
 func (c *SpotifyClient) SearchSongs(search_phrase string) ([]client.Song, error) {
-	return nil, errors.New("Unimplemnted")
+	var searchResult searchRes
+	var errResult apiErr
+
+	success, err := c.getApiEndpoint(
+		"/search", 
+		map[string]string {
+			"q": search_phrase,
+			"type": "track",
+		},
+		http.StatusOK,
+		&searchResult,
+		&errResult,
+	)	
+
+	if(err != nil) {
+		return nil, errors.Wrap(err, "failed searching songs")
+	}
+
+	if(!success) {
+		return nil, errors.New(fmt.Sprintf("%d: %s", errResult.Error.Status, errResult.Error.Message))
+	}
+
+	songs := make([]client.Song, 0)
+	for _, s := range searchResult.Tracks.Items {
+		songs = append(songs, client.Song{
+			Name: s.Name,
+			ArtistName: s.Artists[0].Name,
+			Priv: s.Id,
+		})
+	}
+
+	return songs, nil
 }
 
 func (c *SpotifyClient) QueueSong(song client.Song) error {
@@ -184,8 +215,8 @@ func (c *SpotifyClient) QueueSong(song client.Song) error {
 
 func (c *SpotifyClient) GetPlayingSong() (client.Song, error) {
 
-	var currentSong map[string]interface{}
-	var errMsg ApiErr
+	var currentSong currentSongRes
+	var errMsg apiErr
 
 	// TODO: looks like this endpoint might return 204 if no song is currently playing.
 	// 		I might need to find another endpoint
@@ -198,8 +229,7 @@ func (c *SpotifyClient) GetPlayingSong() (client.Song, error) {
 		return client.Song{}, errors.New(fmt.Sprintf("%d: %s", errMsg.Error.Status, errMsg.Error.Message))
 	}
 
-	//TODO: TEMP
 	return client.Song{
-		Name: currentSong["item"].(map[string]interface{})["name"].(string),
+		Name: currentSong.Item.Name,
 	}, nil
 }

@@ -29,6 +29,7 @@ func (s *WebServer) registerRoutes() {
 	s.server.GET("/", s.homePage)
 	s.server.GET("/auth", s.clientAuthCallback)
 	s.server.GET("/share", s.adminSharePage)
+	s.server.GET("/search/:song", s.searchSongs)
 }
 
 func (s *WebServer) homePage(c echo.Context) error {
@@ -56,6 +57,15 @@ func (s *WebServer) adminSharePage(c echo.Context) error {
 	}
 
 	return c.String(http.StatusOK, song.Name)
+}
+
+func (s *WebServer) searchSongs(c echo.Context) error {
+	songs, err := s.client.SearchSongs(c.Param("song"))
+	if(err != nil) {
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, songs)
 }
 
 func (s *WebServer) Serve(host string, port int16) error {

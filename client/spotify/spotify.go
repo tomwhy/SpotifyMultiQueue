@@ -16,7 +16,7 @@ import (
 const (
 	API_BASE_URL = "https://api.spotify.com/v1"
 	AUTH_BASE_URL = "https://accounts.spotify.com"
-	APP_SCOPES = ""
+	APP_SCOPES = "user-read-currently-playing"
 )
 
 type SpotifyClient struct {
@@ -51,7 +51,7 @@ func NewSpotifyClient(clientId secrets.Secret, clientSecret secrets.Secret, redi
 func (c *SpotifyClient) GetAuthorizationURL() (*url.URL, error) {
 	spotifyClientId, err := c.clientId.Read()
 	if(err != nil) {
-		return nil, errors.Warp(err, "Failed reading clientId")
+		return nil, errors.Wrap(err, "Failed reading clientId")
 	}
 
 
@@ -60,6 +60,8 @@ func (c *SpotifyClient) GetAuthorizationURL() (*url.URL, error) {
 		"authorize", 
 		map[string]string{
 			"client_id": string(spotifyClientId),
+			"response_type": "code",
+			"scope": APP_SCOPES,
 			"redirect_uri": c.redirectUri,
 			"state": c.state,
 		},
@@ -70,12 +72,12 @@ func (c *SpotifyClient) GetAuthorizationURL() (*url.URL, error) {
 func (c *SpotifyClient) getClientAuthString() (string, error) {
 	clientId, err := c.clientId.Read()
 	if(err != nil) {
-		return "", errors.Warp(err, "Failed reading clientId")
+		return "", errors.Wrap(err, "Failed reading clientId")
 	}
 
 	clientSecret, err := c.clientSecret.Read()
 	if(err != nil) {
-		return "", errors.Warp(err, "Failed reading clientSecret")
+		return "", errors.Wrap(err, "Failed reading clientSecret")
 	}
 
 	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", clientId, clientSecret))), nil
@@ -84,7 +86,7 @@ func (c *SpotifyClient) getClientAuthString() (string, error) {
 func (c *SpotifyClient) GetAccessToken(code string) (client.AccessToken, error) {
 	auth, err := c.getClientAuthString()
 	if(err != nil) {
-		return errors.Wrap("failed getting client auth string")
+		return nil, errors.Wrap(err, "failed getting client auth string")
 	} 
 
 	authRes, err := utils.SendPostApiRequest(
@@ -102,7 +104,7 @@ func (c *SpotifyClient) GetAccessToken(code string) (client.AccessToken, error) 
 	)
 
 	if(err != nil) {
-		return errors.Wrap(err, "failed getting access token")
+		return nil, errors.Wrap(err, "failed getting access token")
 	}
 	resDecoder := json.NewDecoder(authRes.Body)
 
@@ -110,7 +112,7 @@ func (c *SpotifyClient) GetAccessToken(code string) (client.AccessToken, error) 
 		var errRes AuthErr;
 		resDecoder.Decode(&errRes)
 
-		return errors.New(fmt.Sprintf("%s: %s", errRes.Error, errRes.Desc))
+		return nil, errors.New(fmt.Sprintf("%s: %s", errRes.Error, errRes.Desc))
 	}
 
 	var tokenRes TokenResponse;
@@ -123,23 +125,20 @@ func (c *SpotifyClient) GetAccessToken(code string) (client.AccessToken, error) 
 	}, nil
 }
 
-func (c *SpotifyClient) CompleteAuthorization(urlParams map[string]string) error {
-	state, exists := urlParams["state"]
-	if(!exists || state != c.state) {
+func (c *SpotifyClient) CompleteAuthorization(urlParams url.Values) error {
+	if(!urlParams.Has("state") || urlParams.Get("state") != c.state) {
 		return errors.New("Unexpected state was passed to callback");
 	}
 
-	errorMsg, exists := urlParams["error"]
-	if(exists) {
-		return errors.New(errorMsg)
+	if(urlParams.Has("error")) {
+		return errors.New(urlParams.Get("error"))
 	}
 
-	code, exists := urlParams["code"]
-	if(!exists) {
+	if(!urlParams.Has("code")) {
 		return errors.New("Missing authorization code")
 	}
 
-	token, err := c.GetAccessToken(code)
+	token, err := c.GetAccessToken(urlParams.Get("code"))
 	if (err != nil) {
 		return errors.Wrap(err, "failed getting access token")
 	}
@@ -160,7 +159,7 @@ func (c *SpotifyClient) getApiEndpoint(endpoint string, params map[string]string
 	)
 
 	if(err != nil) {
-		return false, errors.Wrap("failed getting api result")
+		return false, errors.Wrap(err, "failed getting api result")
 	}
 
 	if(apiRes.StatusCode != expectedCode) {
@@ -188,16 +187,18 @@ func (c *SpotifyClient) GetPlayingSong() (client.Song, error) {
 	var currentSong map[string]interface{}
 	var errMsg ApiErr
 
+	// TODO: looks like this endpoint might return 204 if no song is currently playing.
+	// 		I might need to find another endpoint
 	success, err := c.getApiEndpoint("/me/player/currently-playing", nil, http.StatusOK, &currentSong, &errMsg)
 	if(err != nil) {
-		return client.Song{}, errors.Wrap("failed getting current song")
+		return client.Song{}, errors.Wrap(err, "failed getting current song")
 	}
 
 	if(!success) {
-		return client.Song{}, errors.New(fmt.Sprintf("%d: %s", errMsg.Status, errMsg.Message))
+		return client.Song{}, errors.New(fmt.Sprintf("%d: %s", errMsg.Error.Status, errMsg.Error.Message))
 	}
 
-	// TEMP
+	//TODO: TEMP
 	return client.Song{
 		Name: currentSong["item"].(map[string]interface{})["name"].(string),
 	}, nil

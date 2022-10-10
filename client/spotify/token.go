@@ -20,7 +20,7 @@ func (t *SpotifyAccessToken) RefreshToken(client client.Client) (client.AccessTo
 	spotifyClient, success := client.(*SpotifyClient)
 
 	if(!success) {
-		return errors.New("Cannot refresh a spotify token with a non spotify client")
+		return nil, errors.New("Cannot refresh a spotify token with a non spotify client")
 	}
 
 	return spotifyClient.GetAccessToken(t.RefreshTokenString)

@@ -15,6 +15,8 @@ type TokenResponse struct {
 }
 
 type ApiErr struct {
-	Status int `json:"status"`
-	Message string `json:"message"`
+	Error struct {
+		Status int `json:"status"`
+		Message string `json:"message"`
+	} `json:"error"`
 }
